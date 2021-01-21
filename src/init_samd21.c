@@ -26,55 +26,63 @@ static void dfll_sync(void) {
 
 void system_init(void) {
 
-  NVMCTRL->CTRLB.bit.RWS = 1;
+  NVMCTRL->CTRLB.bit.RWS = 1; // One wait state for 48 MHz @ 3.3 V
+
+  /*
+   * At reset:
+   * - OSC8M clock source is enabled with a divider by 8 (1 MHz).
+   * - Generic Clock Generator 0 (GCLKMAIN) is using OSC8M as source.
+   */
+
+  SYSCTRL->OSC8M.bit.PRESC = 0x0; // Set the OSC8M clock source to 8 MHz
 
 #if defined(CRYSTALLESS)
-  /* Configure OSC8M as source for GCLK_GEN 2 */
-  GCLK->GENDIV.reg = GCLK_GENDIV_ID(2);  // Read GENERATOR_ID - GCLK_GEN_2
-  gclk_sync();
 
-  GCLK->GENCTRL.reg = GCLK_GENCTRL_ID(2) | GCLK_GENCTRL_SRC_OSC8M_Val | GCLK_GENCTRL_GENEN;
-  gclk_sync();
+  /* Turn on DFLL with USB correction and sync to the external USB SOF
+   *
+   * SAM D21 DA1 Family DataSheet DS40001882F
+   * SAM D21 Family Silicon Errata and Data Sheet Clarification DS80000760D Revision D 2019-04
+   *
+   * USB Clock Recovery Mode
+   *   The SOF signal from USB device will be used as reference clock (CLK_DFLL_REF),
+   *   ignoring the selected generic clock reference. When the USB device is connected,
+   *   a SOF will be sent every 1 ms, thus DFLLVAL.MUX bits should be written with
+   *   0xBB80 (48000) to obtain a 48 MHz clock.
+   */
 
-  // Turn on DFLL with USB correction and sync to internal 8 mhz oscillator
-  SYSCTRL->DFLLCTRL.reg = SYSCTRL_DFLLCTRL_ENABLE;
-  dfll_sync();
+    // Works around a quirk in the hardware (Errata 1.2.1):
+    // the DFLLCTRL register must be manually reset to this value before configuration.
+    dfll_sync();
+    SYSCTRL->DFLLCTRL.reg = SYSCTRL_DFLLCTRL_ENABLE;
+    dfll_sync();
 
-  SYSCTRL_DFLLVAL_Type dfllval_conf = {0};
-  uint32_t coarse =( *((uint32_t *)(NVMCTRL_OTP4)
-		       + (NVM_SW_CALIB_DFLL48M_COARSE_VAL / 32))
-		     >> (NVM_SW_CALIB_DFLL48M_COARSE_VAL % 32))
-    & ((1 << 6) - 1);
-  if (coarse == 0x3f) {
-    coarse = 0x1f;
-  }
-  dfllval_conf.bit.COARSE  = coarse;
-  // TODO(tannewt): Load this from a well known flash location so that it can be
-  // calibrated during testing.
-  dfllval_conf.bit.FINE    = 0x1ff;
+    /* Write the coarse and fine calibration from NVM. */
+    uint32_t coarse = ((*(uint32_t*)FUSES_DFLL48M_COARSE_CAL_ADDR) & FUSES_DFLL48M_COARSE_CAL_Msk) >> FUSES_DFLL48M_COARSE_CAL_Pos;
+    uint32_t fine = ((*(uint32_t*)FUSES_DFLL48M_FINE_CAL_ADDR) & FUSES_DFLL48M_FINE_CAL_Msk) >> FUSES_DFLL48M_FINE_CAL_Pos;
+    SYSCTRL->DFLLVAL.reg = SYSCTRL_DFLLVAL_COARSE(coarse) | SYSCTRL_DFLLVAL_FINE(fine);
+    dfll_sync();
 
-  SYSCTRL->DFLLMUL.reg = SYSCTRL_DFLLMUL_CSTEP( 0x1f / 4 ) | // Coarse step is 31, half of the max value
-                         SYSCTRL_DFLLMUL_FSTEP( 10 ) |
-                         48000;
-  SYSCTRL->DFLLVAL.reg = dfllval_conf.reg;
-  SYSCTRL->DFLLCTRL.reg = 0;
-  dfll_sync();
-  SYSCTRL->DFLLCTRL.reg = SYSCTRL_DFLLCTRL_MODE |
-                          SYSCTRL_DFLLCTRL_CCDIS |
-                          SYSCTRL_DFLLCTRL_USBCRM | /* USB correction */
-                          SYSCTRL_DFLLCTRL_BPLCKC;
-  dfll_sync();
-  SYSCTRL->DFLLCTRL.reg |= SYSCTRL_DFLLCTRL_ENABLE ;
-  dfll_sync();
+    /* Configure the settings to enable USB clock recovery mode. */
+    SYSCTRL->DFLLCTRL.reg |=
+        /* Enable USB clock recovery mode */
+        SYSCTRL_DFLLCTRL_USBCRM |
+        /* Disable chill cycle as per datasheet to speed up locking.
+        This is specified in Section 17.6.7.2.2, and chill cycles are described in Section 17.6.7.2.1. */
+        SYSCTRL_DFLLCTRL_CCDIS;
 
-  GCLK_CLKCTRL_Type clkctrl={0};
-  uint16_t temp;
-  GCLK->CLKCTRL.bit.ID = 2; // GCLK_ID - DFLL48M Reference
-  temp = GCLK->CLKCTRL.reg;
-  clkctrl.bit.CLKEN = 1;
-  clkctrl.bit.WRTLOCK = 0;
-  clkctrl.bit.GEN = GCLK_CLKCTRL_GEN_GCLK0_Val;
-  GCLK->CLKCTRL.reg = (clkctrl.reg | temp);
+    /* Configure the DFLL to multiply the 1 kHz clock to 48 MHz. */
+    SYSCTRL->DFLLMUL.reg =
+        /* This value is output frequency / reference clock frequency, so 48 MHz / 1 kHz */
+        SYSCTRL_DFLLMUL_MUL(48000) |
+        /* The coarse and fine values can be set to their minimum
+           since coarse is fixed in USB clock recovery mode and fine should lock on quickly. */
+        SYSCTRL_DFLLMUL_FSTEP(1) |
+        SYSCTRL_DFLLMUL_CSTEP(1);
+
+    /* Set the DFLL into closed loop mode and enable it. */
+    SYSCTRL->DFLLCTRL.bit.MODE = 1;
+    SYSCTRL->DFLLCTRL.bit.ENABLE = 1;
+    dfll_sync();
 
 #else
 
