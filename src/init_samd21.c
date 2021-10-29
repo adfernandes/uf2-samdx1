@@ -33,7 +33,7 @@ void system_init(void) {
   GCLK->GENDIV.reg = GCLK_GENDIV_ID(2);  // Read GENERATOR_ID - GCLK_GEN_2
   gclk_sync();
 
-  GCLK->GENCTRL.reg = GCLK_GENCTRL_ID(2) | GCLK_GENCTRL_SRC_OSC8M_Val | GCLK_GENCTRL_GENEN;
+  GCLK->GENCTRL.reg = GCLK_GENCTRL_ID(2) | GCLK_GENCTRL_SRC_OSC8M | GCLK_GENCTRL_GENEN;
   gclk_sync();
 
   // Turn on DFLL with USB correction and sync to internal 8 mhz oscillator
