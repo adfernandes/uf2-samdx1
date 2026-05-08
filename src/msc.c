@@ -74,9 +74,12 @@
 #define  LSB(u16)   (((uint8_t  *)&(u16))[0]) //!< Least significant byte of \a u16.
 
 bool mscReset = false;
+//! True when a failed Data-In command has stalled Bulk-IN and must send CSW later.
+static bool udi_msc_csw_pending;
 
 void msc_reset(void) {
     mscReset = true;
+    udi_msc_csw_pending = false;
     reset_ep(USB_EP_MSC_IN);
     reset_ep(USB_EP_MSC_OUT);
 }
@@ -145,6 +148,8 @@ static void udi_msc_csw_process(void);
  * or UDD callback when endpoint halt is cleared
  */
 void udi_msc_csw_send(void);
+static bool udi_msc_csw_ready_to_send(void);
+static void udi_msc_command_invalid(void);
 
 /**
  * \name Routines manage sense data
@@ -318,6 +323,14 @@ void process_msc(void) {
     process_hid();
 #endif
 
+    if (udi_msc_csw_pending) {
+        if (!udi_msc_csw_ready_to_send())
+            return;
+        udi_msc_csw_pending = false;
+        udi_msc_csw_process();
+        return;
+    }
+
     if (!try_read_cbw(&udi_msc_cbw, USB_EP_MSC_OUT, false))
         return; // no data
 
@@ -381,8 +394,7 @@ void process_msc(void) {
 
     default:
         logval("Invalid MSC command", udi_msc_cbw.CDB[0]);
-        udi_msc_sense_command_invalid();
-        udi_msc_csw_process();
+        udi_msc_command_invalid();
         break;
     }
 }
@@ -438,28 +450,6 @@ static void udi_msc_data_send(uint8_t *buffer, uint8_t buf_size) {
 //------- Routines to process CSW packet
 
 static void udi_msc_csw_process(void) {
-    if (0 != udi_msc_csw.dCSWDataResidue) {
-        logval("left-over residue", udi_msc_csw.dCSWDataResidue);
-
-        /*
-        uint8_t buf[64] = {0};
-        while (udi_msc_csw.dCSWDataResidue > 0) {
-            size_t len = min(udi_msc_csw.dCSWDataResidue, 64);
-            USB_Write((void *)buf, len, USB_EP_MSC_IN);
-            udi_msc_csw.dCSWDataResidue -= len;
-        }
-        */
-
-        /*
-        // Residue not NULL
-        // then STALL next request from USB host on corresponding endpoint
-        if (udi_msc_cbw.bmCBWFlags & USB_CBW_DIRECTION_IN)
-            udd_ep_set_halt(USB_EP_MSC_IN);
-        else
-            udd_ep_set_halt(USB_EP_MSC_OUT);
-            */
-    }
-
     // Prepare and send CSW
     udi_msc_csw.dCSWTag = udi_msc_cbw.dCBWTag;
     udi_msc_csw.dCSWDataResidue = cpu_to_le32(udi_msc_csw.dCSWDataResidue);
@@ -467,6 +457,24 @@ static void udi_msc_csw_process(void) {
 }
 
 void udi_msc_csw_send(void) { USB_Write((void *)&udi_msc_csw, sizeof(udi_msc_csw), USB_EP_MSC_IN); }
+
+static bool udi_msc_csw_ready_to_send(void) {
+    return !(USB->DEVICE.DeviceEndpoint[USB_EP_MSC_IN].EPSTATUS.reg &
+             USB_DEVICE_EPSTATUSSET_STALLRQ1);
+}
+
+static void udi_msc_command_invalid(void) {
+    udi_msc_sense_command_invalid();
+
+    if ((udi_msc_csw.dCSWDataResidue != 0) &&
+        (udi_msc_cbw.bmCBWFlags & USB_CBW_DIRECTION_IN)) {
+        udi_msc_csw_pending = true;
+        udd_ep_set_halt(USB_EP_MSC_IN);
+        return;
+    }
+
+    udi_msc_csw_process();
+}
 
 //---------------------------------------------
 //------- Routines manage sense data
