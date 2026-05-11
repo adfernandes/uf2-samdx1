@@ -57,7 +57,11 @@ struct TextFile {
 const char infoUf2File[] = //
     "UF2 Bootloader " UF2_VERSION "\r\n"
     "Model: " PRODUCT_NAME "\r\n"
-    "Board-ID: " BOARD_ID "\r\n";
+    "Board-ID: " BOARD_ID "\r\n"
+    #if USE_URL_IN_INFO
+    INDEX_URL "\r\n"
+    #endif
+    ;
 
 #if USE_FAT
 #if USE_INDEX_HTM

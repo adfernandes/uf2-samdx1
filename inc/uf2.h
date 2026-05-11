@@ -41,14 +41,27 @@
 // needs to be more than ~4200 (to force FAT16)
 #define NUM_FAT_BLOCKS 16000
 
+// 8kB with NeoPixel or DotStar is a tight fit.
+#define SAMD21_MINIMIZE (defined(SAMD21) && (defined(BOARD_NEOPIXEL_PIN) || defined(BOARD_RGBLED_CLOCK_PIN)))
+
 // Logging to help debugging
 #define USE_LOGS 0
 // Check various conditions; best leave on
 #define USE_ASSERT 0 // 188 bytes
 // Enable reading flash via FAT files; otherwise drive will appear empty
 #define USE_FAT 1 // 272 bytes
-// Enable index.htm file on the drive
-#define USE_INDEX_HTM 1 // 132 bytes
+
+// Enable URL in INFO_UF2.TXT. Used for boards that are a very tight fit.
+#ifndef USE_URL_IN_INFO
+#define USE_URL_IN_INFO SAMD21_MINIMIZE
+#endif
+
+// Enable index.htm file on the drive.
+// 132 bytes
+#ifndef USE_INDEX_HTM
+#define USE_INDEX_HTM (!USE_URL_IN_INFO)
+#endif
+
 // Enable USB CDC (Communication Device Class; i.e., USB serial) monitor for Arduino style flashing
 #define USE_CDC 1 // 1264 bytes (plus terminal, see below)
 // Support the UART (real serial port, not USB)

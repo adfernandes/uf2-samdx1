@@ -9,6 +9,10 @@
 #define INDEX_URL "http://adafru.it/3727"
 #define BOARD_ID "SAMD21G18A-ItsyBitsy-v0"
 
+// URL does not fit, even without INDEX.HTM
+#define USE_URL_IN_INFO 0
+#define USE_INDEX_HTM 0
+
 #define USB_VID 0x239A
 #define USB_PID 0x000F
 
