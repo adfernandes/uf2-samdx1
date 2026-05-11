@@ -1,4 +1,11 @@
 BOARD=zero
+
+ifeq ($(VERBOSE), 1)
+Q=
+else
+Q=@
+endif
+
 -include Makefile.user
 include boards/$(BOARD)/board.mk
 CC=arm-none-eabi-gcc
@@ -19,19 +26,22 @@ WFLAGS = \
 -Wno-deprecated-declarations -Wpacked -Wredundant-decls -Wnested-externs \
 -Wlong-long -Wunreachable-code -Wcast-align \
 -Wno-missing-braces -Wno-overflow -Wno-shadow -Wno-attributes -Wno-packed -Wno-pointer-sign
+
 CFLAGS = $(COMMON_FLAGS) \
 -x c -c -pipe -nostdlib \
---param max-inline-insns-single=500 \
 -fno-strict-aliasing -fdata-sections -ffunction-sections \
 -D__$(CHIP_VARIANT)__ \
 $(WFLAGS)
 
-UF2_VERSION_BASE = $(shell git describe --dirty --always --tags)
+# Use "+" instead of "-dirty" to save a few bytes.
+UF2_VERSION_BASE = $(shell git describe --dirty=+ --always --tags)
 
 ifeq ($(CHIP_FAMILY), samd21)
 LINKER_SCRIPT=scripts/samd21j18a.ld
 BOOTLOADER_SIZE=8192
 SELF_LINKER_SCRIPT=scripts/samd21j18a_self.ld
+# Code squeezing.
+CFLAGS += -fno-jump-tables
 endif
 
 ifeq ($(CHIP_FAMILY), samd51)
@@ -155,37 +165,37 @@ selflogs:
 	node scripts/dbgtool.js $(BUILD_PATH)/update-$(NAME).map
 
 dirs:
-	@echo "Building $(BOARD)"
+	@echo
+	@echo "--- Building $(BOARD) ---"
 	-@mkdir -p $(BUILD_PATH)
 
 $(EXECUTABLE): $(OBJECTS)
-	$(CC) -L$(BUILD_PATH) $(LDFLAGS) \
+	$(Q)$(CC) -L$(BUILD_PATH) $(LDFLAGS) \
 		 -T$(LINKER_SCRIPT) \
 		 -Wl,-Map,$(BUILD_PATH)/$(NAME).map -o $(BUILD_PATH)/$(NAME).elf $(OBJECTS)
-	arm-none-eabi-objcopy -O binary $(BUILD_PATH)/$(NAME).elf $@
-	@echo
+	$(Q)arm-none-eabi-objcopy -O binary $(BUILD_PATH)/$(NAME).elf $@
+	$(Q)@echo
 	-@arm-none-eabi-size $(BUILD_PATH)/$(NAME).elf | awk '{ s=$$1+$$2; print } END { print ""; print "Space left: " ($(BOOTLOADER_SIZE)-s) }'
-	@echo
+	$(Q)@echo
 
-$(BUILD_PATH)/uf2_version.h: Makefile
-	echo "#define UF2_VERSION_BASE \"$(UF2_VERSION_BASE)\""> $@
+$(BUILD_PATH)/uf2_version.h: Makefile dirs
+	@echo "#define UF2_VERSION_BASE \"$(UF2_VERSION_BASE)\""> $@
 
 $(SELF_EXECUTABLE): $(SELF_OBJECTS)
-	$(CC) -L$(BUILD_PATH) $(LDFLAGS) \
+	$(Q)$(CC) -L$(BUILD_PATH) $(LDFLAGS) \
 		 -T$(SELF_LINKER_SCRIPT) \
 		 -Wl,-Map,$(BUILD_PATH)/update-$(NAME).map -o $(BUILD_PATH)/update-$(NAME).elf $(SELF_OBJECTS)
-	arm-none-eabi-objcopy -O binary $(BUILD_PATH)/update-$(NAME).elf $(BUILD_PATH)/update-$(NAME).bin
-	python3 lib/uf2/utils/uf2conv.py -b $(BOOTLOADER_SIZE) -c -o $@ $(BUILD_PATH)/update-$(NAME).bin
+	$(Q)arm-none-eabi-objcopy -O binary $(BUILD_PATH)/update-$(NAME).elf $(BUILD_PATH)/update-$(NAME).bin
+	$(Q)python3 lib/uf2/utils/uf2conv.py -b $(BOOTLOADER_SIZE) -c -o $@ $(BUILD_PATH)/update-$(NAME).bin
 
 $(BUILD_PATH)/%.o: src/%.c $(wildcard inc/*.h boards/*/*.h) $(BUILD_PATH)/uf2_version.h
-	echo "$<"
-	$(CC) $(CFLAGS) $(BLD_EXTA_FLAGS) $(INCLUDES) $< -o $@
+	$(Q)$(CC) $(CFLAGS) $(BLD_EXTA_FLAGS) $(INCLUDES) $< -o $@
 
 $(BUILD_PATH)/%.o: $(BUILD_PATH)/%.c
-	$(CC) $(CFLAGS) $(BLD_EXTA_FLAGS) $(INCLUDES) $< -o $@
+	$(Q)$(CC) $(CFLAGS) $(BLD_EXTA_FLAGS) $(INCLUDES) $< -o $@
 
 $(BUILD_PATH)/selfdata.c: $(EXECUTABLE) scripts/gendata.py src/sketch.cpp
-	python3 scripts/gendata.py $(BOOTLOADER_SIZE) $(EXECUTABLE)
+	$(Q)python3 scripts/gendata.py $(BOOTLOADER_SIZE) $(EXECUTABLE)
 
 clean:
 	rm -rf build
@@ -206,16 +216,15 @@ applet1: $(BUILD_PATH)/utils.asmdump
 	node scripts/genapplet.js $< resetIntoApp
 
 drop-board: all
-	@echo "*** Copy files for $(BOARD)"
-	mkdir -p build/drop
-	rm -rf build/drop/$(BOARD)
-	mkdir -p build/drop/$(BOARD)
-	cp $(SELF_EXECUTABLE) build/drop/$(BOARD)/
-	cp $(EXECUTABLE) build/drop/$(BOARD)/
+	@mkdir -p build/drop
+	@rm -rf build/drop/$(BOARD)
+	@mkdir -p build/drop/$(BOARD)
+	@cp $(SELF_EXECUTABLE) build/drop/$(BOARD)/
+	@cp $(EXECUTABLE) build/drop/$(BOARD)/
 # .ino works only for SAMD21 right now; suppress for SAMD51
 ifeq ($(CHIP_FAMILY),samd21)
-	cp $(SELF_EXECUTABLE_INO) build/drop/$(BOARD)/
-	cp boards/$(BOARD)/board_config.h build/drop/$(BOARD)/
+	@cp $(SELF_EXECUTABLE_INO) build/drop/$(BOARD)/
+	@cp boards/$(BOARD)/board_config.h build/drop/$(BOARD)/
 endif
 
 drop-pkg:
@@ -225,7 +234,7 @@ drop-pkg:
 	rm -rf build/uf2-samdx1-$(UF2_VERSION_BASE)
 
 all-boards:
-	for f in `cd boards; ls` ; do "$(MAKE)" BOARD=$$f drop-board || break -1; done
+	$(Q)@for f in `cd boards; ls` ; do "$(MAKE)" --no-print-directory BOARD=$$f drop-board || break 1; done
 
 drop: all-boards drop-pkg
 
