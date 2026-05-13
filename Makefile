@@ -174,9 +174,9 @@ $(EXECUTABLE): $(OBJECTS)
 		 -T$(LINKER_SCRIPT) \
 		 -Wl,-Map,$(BUILD_PATH)/$(NAME).map -o $(BUILD_PATH)/$(NAME).elf $(OBJECTS)
 	$(Q)arm-none-eabi-objcopy -O binary $(BUILD_PATH)/$(NAME).elf $@
-	$(Q)@echo
+	@echo
 	-@arm-none-eabi-size $(BUILD_PATH)/$(NAME).elf | awk '{ s=$$1+$$2; print } END { print ""; print "Space left: " ($(BOOTLOADER_SIZE)-s) }'
-	$(Q)@echo
+	@echo
 
 $(BUILD_PATH)/uf2_version.h: Makefile dirs
 	@echo "#define UF2_VERSION_BASE \"$(UF2_VERSION_BASE)\""> $@
@@ -234,7 +234,7 @@ drop-pkg:
 	rm -rf build/uf2-samdx1-$(UF2_VERSION_BASE)
 
 all-boards:
-	$(Q)@for f in `cd boards; ls` ; do "$(MAKE)" --no-print-directory BOARD=$$f drop-board || break 1; done
+	@for f in `cd boards; ls` ; do "$(MAKE)" --no-print-directory BOARD=$$f drop-board || break 1; done
 
 drop: all-boards drop-pkg
 
