@@ -178,7 +178,7 @@ $(EXECUTABLE): $(OBJECTS)
 	-@arm-none-eabi-size $(BUILD_PATH)/$(NAME).elf | awk '{ s=$$1+$$2; print } END { print ""; print "Space left: " ($(BOOTLOADER_SIZE)-s) }'
 	@echo
 
-$(BUILD_PATH)/uf2_version.h: Makefile dirs
+$(BUILD_PATH)/uf2_version.h: Makefile | dirs
 	@echo "#define UF2_VERSION_BASE \"$(UF2_VERSION_BASE)\""> $@
 
 $(SELF_EXECUTABLE): $(SELF_OBJECTS)
