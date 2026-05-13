@@ -458,18 +458,26 @@ static void udi_msc_csw_process(void) {
 
 void udi_msc_csw_send(void) { USB_Write((void *)&udi_msc_csw, sizeof(udi_msc_csw), USB_EP_MSC_IN); }
 
+// CSW is always sent on EP_MSC_IN, but USB_Write is blocking — so for both
+// Hi> and Ho> failures we must defer the CSW until the host has cleared
+// the relevant pipe halt. Otherwise, the main loop is stuck inside USB_Write
+// and we can't process the host's CLEAR_FEATURE SETUP, deadlocking recovery.
+// We check both directions: only one is stalled at a time, but checking both
+// means the predicate doesn't need to know which.
 static bool udi_msc_csw_ready_to_send(void) {
     return !(USB->DEVICE.DeviceEndpoint[USB_EP_MSC_IN].EPSTATUS.reg &
-             USB_DEVICE_EPSTATUSSET_STALLRQ1);
+             USB_DEVICE_EPSTATUSSET_STALLRQ1) &&
+           !(USB->DEVICE.DeviceEndpoint[USB_EP_MSC_OUT].EPSTATUS.reg &
+             USB_DEVICE_EPSTATUSSET_STALLRQ0);
 }
 
 static void udi_msc_command_invalid(void) {
     udi_msc_sense_command_invalid();
 
-    if ((udi_msc_csw.dCSWDataResidue != 0) &&
-        (udi_msc_cbw.bmCBWFlags & USB_CBW_DIRECTION_IN)) {
+    if (udi_msc_csw.dCSWDataResidue != 0) {
         udi_msc_csw_pending = true;
-        udd_ep_set_halt(USB_EP_MSC_IN);
+        udd_ep_set_halt((udi_msc_cbw.bmCBWFlags & USB_CBW_DIRECTION_IN)
+                        ? USB_EP_MSC_IN : USB_EP_MSC_OUT);
         return;
     }
 
