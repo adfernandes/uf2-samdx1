@@ -7,6 +7,10 @@
 #define INDEX_URL "https://github.com/StackRduino/StackRduino_M0"
 #define BOARD_ID "SAMD21G18A-StackRduino-PRO"
 
+// URL does not fit, even without INDEX.HTM
+#define USE_URL_IN_INFO 0
+#define USE_INDEX_HTM 0
+
 #define USB_VID 0x1209
 #define USB_PID 0xE3E2
 
