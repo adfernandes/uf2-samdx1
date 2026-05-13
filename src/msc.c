@@ -74,7 +74,9 @@
 #define  LSB(u16)   (((uint8_t  *)&(u16))[0]) //!< Least significant byte of \a u16.
 
 bool mscReset = false;
-//! True when a failed Data-In command has stalled Bulk-IN and must send CSW later.
+//! True when an invalid command with nonzero residue has stalled a bulk endpoint
+//! and the CSW must be sent later; the stall may be on Bulk-IN or Bulk-OUT
+//! depending on the CBW direction.
 static bool udi_msc_csw_pending;
 
 void msc_reset(void) {
