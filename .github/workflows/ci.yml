@@ -12,10 +12,10 @@ concurrency:
 
 jobs:
   build:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     steps:
     - name: Set up repository
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
       with:
         fetch-depth: 0
         filter: "blob:none"
@@ -25,7 +25,7 @@ jobs:
       uses: carlosperate/arm-none-eabi-gcc-action@v1
       with:
         # When changing this update what Windows grabs too!
-        release: '13.2.Rel1'    
+        release: '14.3.Rel1'
     - name: Extract version identifier
       run: |
         echo >> $GITHUB_ENV "UF2_VERSION_BASE=`git describe --dirty --always --tags`"
@@ -33,6 +33,6 @@ jobs:
       run: make submodules && make -j$(nproc) all-boards && mv build/drop build/uf2-samdx1-$UF2_VERSION_BASE
     - name: Upload artifact
       uses: actions/upload-artifact@v4
-      with: 
+      with:
         path: build/uf2-samdx1-${{ env.UF2_VERSION_BASE }}/*
         name: uf2-samdx1-${{ env.UF2_VERSION_BASE }}
