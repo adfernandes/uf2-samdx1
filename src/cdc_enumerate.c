@@ -749,7 +749,7 @@ __attribute__((noinline))
 static void configureInterruptInOut(uint8_t ep) {
     USB->DEVICE.DeviceEndpoint[ep].EPCFG.reg =
         USB_DEVICE_EPCFG_EPTYPE0(4) | USB_DEVICE_EPCFG_EPTYPE1(4);
-    USB->DEVICE.DeviceEndpoint[ep].EPSTATUSCLR.reg = USB_DEVICE_EPSTATUSSET_BK0RDY;
+    USB->DEVICE.DeviceEndpoint[ep].EPSTATUSCLR.reg = USB_DEVICE_EPSTATUSCLR_BK0RDY;
     USB->DEVICE.DeviceEndpoint[ep].EPSTATUSCLR.reg = USB_DEVICE_EPSTATUSCLR_BK1RDY;
     usb_endpoint_table[ep].DeviceDescBank[0].PCKSIZE.bit.SIZE = 3;
     usb_endpoint_table[ep].DeviceDescBank[1].PCKSIZE.bit.SIZE = 3;
