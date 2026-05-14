@@ -744,6 +744,18 @@ static void configureInOut(uint8_t in_ep) {
     usb_endpoint_table[in_ep].DeviceDescBank[1].ADDR.reg = (uint32_t)&endpointCache[in_ep].buf;
 }
 
+#if USE_HID || USE_WEBUSB
+__attribute__((noinline))
+static void configureInterruptInOut(uint8_t ep) {
+    USB->DEVICE.DeviceEndpoint[ep].EPCFG.reg =
+        USB_DEVICE_EPCFG_EPTYPE0(4) | USB_DEVICE_EPCFG_EPTYPE1(4);
+    USB->DEVICE.DeviceEndpoint[ep].EPSTATUSCLR.reg = USB_DEVICE_EPSTATUSCLR_BK0RDY;
+    USB->DEVICE.DeviceEndpoint[ep].EPSTATUSCLR.reg = USB_DEVICE_EPSTATUSCLR_BK1RDY;
+    usb_endpoint_table[ep].DeviceDescBank[0].PCKSIZE.bit.SIZE = 3;
+    usb_endpoint_table[ep].DeviceDescBank[1].PCKSIZE.bit.SIZE = 3;
+}
+#endif
+
 static uint16_t wLength;
 
 static void sendCtrl(const void *data, uint32_t len) { USB_Write(data, MIN(len, wLength), 0); }
@@ -865,25 +877,11 @@ void AT91F_CDC_Enumerate() {
         configureInOut(USB_EP_MSC_IN);
 
 #if USE_HID
-        /* Configure INTERRUPT IN/OUT endpoint for HID interface*/
-        USB->DEVICE.DeviceEndpoint[USB_EP_HID].EPCFG.reg =
-            USB_DEVICE_EPCFG_EPTYPE0(4) | USB_DEVICE_EPCFG_EPTYPE1(4);
-
-        USB->DEVICE.DeviceEndpoint[USB_EP_HID].EPSTATUSCLR.reg = USB_DEVICE_EPSTATUSSET_BK0RDY;
-        USB->DEVICE.DeviceEndpoint[USB_EP_HID].EPSTATUSCLR.reg = USB_DEVICE_EPSTATUSCLR_BK1RDY;
-        usb_endpoint_table[USB_EP_HID].DeviceDescBank[0].PCKSIZE.bit.SIZE = 3;
-        usb_endpoint_table[USB_EP_HID].DeviceDescBank[1].PCKSIZE.bit.SIZE = 3;
+        configureInterruptInOut(USB_EP_HID);
 #endif
 
 #if USE_WEBUSB
-        /* Configure INTERRUPT IN/OUT endpoint for HID interface*/
-        USB->DEVICE.DeviceEndpoint[USB_EP_WEB].EPCFG.reg =
-            USB_DEVICE_EPCFG_EPTYPE0(4) | USB_DEVICE_EPCFG_EPTYPE1(4);
-
-        USB->DEVICE.DeviceEndpoint[USB_EP_WEB].EPSTATUSCLR.reg = USB_DEVICE_EPSTATUSSET_BK0RDY;
-        USB->DEVICE.DeviceEndpoint[USB_EP_WEB].EPSTATUSCLR.reg = USB_DEVICE_EPSTATUSCLR_BK1RDY;
-        usb_endpoint_table[USB_EP_WEB].DeviceDescBank[0].PCKSIZE.bit.SIZE = 3;
-        usb_endpoint_table[USB_EP_WEB].DeviceDescBank[1].PCKSIZE.bit.SIZE = 3;
+        configureInterruptInOut(USB_EP_WEB);
 #endif
 
         break;
